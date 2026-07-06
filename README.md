@@ -4,9 +4,12 @@
 
 **Distributed Retention ROI Decision Platform based on gRPC + OpenMP**
 
-Retention ROI Agent is an operational retention intelligence copilot that goes beyond churn prediction and calculates **where, when, and how retention budget should be spent**. When a single CSV/TSV file is uploaded, the platform connects customer churn risk, expected churn timing, intervention effect, customer value, budget constraints, personalized actions, and a live action queue into one decision workflow.
+Retention ROI Agent is a technical follow-up to the original retention project, extending the previous retention ROI decision workflow with distributed and parallel computing technologies such as gRPC and OpenMP. While the original project focused on retention analysis, ROI-based intervention decisions, and dashboard-driven customer targeting, this version advances the system architecture into a more scalable platform by separating computation into distributed worker services and accelerating customer-level ROI scoring through parallel processing.
+
+Experimental results and benchmark outputs for the distributed and parallel implementation can be found in results_distributed/.
 
 [Demo Video](https://github.com/user-attachments/assets/a8b620c8-00bd-4ce2-9d33-da98e79b3fe2) · [Differentiation Strategy](docs/product_differentiation.md) · [Dashboard Decision Loop](docs/dashboard_decision_loop.md) · [Decision Logic](docs/decision_logic.md) · [Technical Guide](docs/technical_guide.md)
+ · [Report In Korean](docs/report.pdf)
 
 </div>
 
