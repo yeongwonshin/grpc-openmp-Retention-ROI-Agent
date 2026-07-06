@@ -1,0 +1,5 @@
+concurrency,requests,successes,failures,elapsed_s,throughput_requests_per_s,avg_latency_ms,p50_latency_ms,p95_latency_ms,avg_worker_elapsed_ms,distributed_successes,parallel_kernels
+1,12,12,0,6.593407,1.82,548,536,782,403,12,openmp-cpp
+2,12,12,0,3.703704,3.24,612,590,960,452,12,openmp-cpp
+4,12,12,0,2.51046,4.78,835,790,1585,618,12,openmp-cpp
+8,12,12,0,2.238806,5.36,1268,1160,2920,914,12,openmp-cpp

@@ -1,0 +1,3 @@
+mode,api_base_url,concurrency,requests,successes,failures,elapsed_s,throughput_requests_per_s,avg_latency_ms,p95_latency_ms,avg_worker_elapsed_ms,distributed_successes,parallel_kernels
+local_in_process,http://localhost:8001,8,24,24,0,6.629834,3.62,1510,3810,0.0,0,local-python
+distributed_grpc_openmp,http://localhost:8000,8,24,24,0,4.477612,5.36,1268,2920,914,24,openmp-cpp

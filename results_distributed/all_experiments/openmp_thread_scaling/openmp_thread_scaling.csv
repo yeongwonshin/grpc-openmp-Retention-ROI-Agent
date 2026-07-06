@@ -1,0 +1,5 @@
+threads,rows,repetitions,mean_kernel_elapsed_ms,std_kernel_elapsed_ms,min_kernel_elapsed_ms,max_kernel_elapsed_ms,throughput_rows_per_s,speedup_vs_1_thread,parallel_efficiency
+1,200000,3,1264.0,4.966555,1260.0,1271.0,158227.848101,1.0,1.0
+2,200000,3,676.0,3.265986,672.0,680.0,295857.988166,1.869822,0.934911
+4,200000,3,376.0,3.559026,373.0,381.0,531914.893617,3.361702,0.840426
+8,200000,3,258.0,3.741657,254.0,263.0,775193.79845,4.899225,0.612403

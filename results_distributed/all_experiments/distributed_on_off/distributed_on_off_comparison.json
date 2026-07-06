@@ -1,0 +1,32 @@
+[
+  {
+    "mode": "local_in_process",
+    "api_base_url": "http://localhost:8001",
+    "concurrency": 8,
+    "requests": 24,
+    "successes": 24,
+    "failures": 0,
+    "elapsed_s": 6.629834,
+    "throughput_requests_per_s": 3.62,
+    "avg_latency_ms": 1510,
+    "p95_latency_ms": 3810,
+    "avg_worker_elapsed_ms": 0.0,
+    "distributed_successes": 0,
+    "parallel_kernels": "local-python"
+  },
+  {
+    "mode": "distributed_grpc_openmp",
+    "api_base_url": "http://localhost:8000",
+    "concurrency": 8,
+    "requests": 24,
+    "successes": 24,
+    "failures": 0,
+    "elapsed_s": 4.477612,
+    "throughput_requests_per_s": 5.36,
+    "avg_latency_ms": 1268,
+    "p95_latency_ms": 2920,
+    "avg_worker_elapsed_ms": 914,
+    "distributed_successes": 24,
+    "parallel_kernels": "openmp-cpp"
+  }
+]

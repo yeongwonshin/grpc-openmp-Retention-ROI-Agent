@@ -1,0 +1,50 @@
+[
+  {
+    "threads": 1,
+    "rows": 200000,
+    "repetitions": 3,
+    "mean_kernel_elapsed_ms": 1264.0,
+    "std_kernel_elapsed_ms": 4.966555,
+    "min_kernel_elapsed_ms": 1260.0,
+    "max_kernel_elapsed_ms": 1271.0,
+    "throughput_rows_per_s": 158227.848101,
+    "speedup_vs_1_thread": 1.0,
+    "parallel_efficiency": 1.0
+  },
+  {
+    "threads": 2,
+    "rows": 200000,
+    "repetitions": 3,
+    "mean_kernel_elapsed_ms": 676.0,
+    "std_kernel_elapsed_ms": 3.265986,
+    "min_kernel_elapsed_ms": 672.0,
+    "max_kernel_elapsed_ms": 680.0,
+    "throughput_rows_per_s": 295857.988166,
+    "speedup_vs_1_thread": 1.869822,
+    "parallel_efficiency": 0.934911
+  },
+  {
+    "threads": 4,
+    "rows": 200000,
+    "repetitions": 3,
+    "mean_kernel_elapsed_ms": 376.0,
+    "std_kernel_elapsed_ms": 3.559026,
+    "min_kernel_elapsed_ms": 373.0,
+    "max_kernel_elapsed_ms": 381.0,
+    "throughput_rows_per_s": 531914.893617,
+    "speedup_vs_1_thread": 3.361702,
+    "parallel_efficiency": 0.840426
+  },
+  {
+    "threads": 8,
+    "rows": 200000,
+    "repetitions": 3,
+    "mean_kernel_elapsed_ms": 258.0,
+    "std_kernel_elapsed_ms": 3.741657,
+    "min_kernel_elapsed_ms": 254.0,
+    "max_kernel_elapsed_ms": 263.0,
+    "throughput_rows_per_s": 775193.79845,
+    "speedup_vs_1_thread": 4.899225,
+    "parallel_efficiency": 0.612403
+  }
+]

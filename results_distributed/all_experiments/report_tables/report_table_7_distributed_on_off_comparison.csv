@@ -1,0 +1,3 @@
+mode,throughput_req_per_s,avg_latency_ms,p95_latency_ms,interpretation
+Local in-process,3.62,1510,3810,API process carries computation load; tail latency increases under concurrent requests.
+gRPC + OpenMP,5.36,1268,2920,ROI computation is separated into worker and C++ kernel; API bottleneck is reduced.

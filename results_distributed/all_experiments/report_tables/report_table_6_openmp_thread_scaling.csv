@@ -1,0 +1,5 @@
+threads,avg_kernel_time_ms,throughput_rows_per_s,speedup,efficiency
+1,1264,158228,1.0,1.0
+2,676,295858,1.87,0.94
+4,376,531915,3.36,0.84
+8,258,775194,4.9,0.61

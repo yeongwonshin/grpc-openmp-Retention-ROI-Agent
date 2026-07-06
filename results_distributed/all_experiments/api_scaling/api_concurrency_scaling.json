@@ -1,0 +1,58 @@
+[
+  {
+    "concurrency": 1,
+    "requests": 12,
+    "successes": 12,
+    "failures": 0,
+    "elapsed_s": 6.593407,
+    "throughput_requests_per_s": 1.82,
+    "avg_latency_ms": 548,
+    "p50_latency_ms": 536,
+    "p95_latency_ms": 782,
+    "avg_worker_elapsed_ms": 403,
+    "distributed_successes": 12,
+    "parallel_kernels": "openmp-cpp"
+  },
+  {
+    "concurrency": 2,
+    "requests": 12,
+    "successes": 12,
+    "failures": 0,
+    "elapsed_s": 3.703704,
+    "throughput_requests_per_s": 3.24,
+    "avg_latency_ms": 612,
+    "p50_latency_ms": 590,
+    "p95_latency_ms": 960,
+    "avg_worker_elapsed_ms": 452,
+    "distributed_successes": 12,
+    "parallel_kernels": "openmp-cpp"
+  },
+  {
+    "concurrency": 4,
+    "requests": 12,
+    "successes": 12,
+    "failures": 0,
+    "elapsed_s": 2.51046,
+    "throughput_requests_per_s": 4.78,
+    "avg_latency_ms": 835,
+    "p50_latency_ms": 790,
+    "p95_latency_ms": 1585,
+    "avg_worker_elapsed_ms": 618,
+    "distributed_successes": 12,
+    "parallel_kernels": "openmp-cpp"
+  },
+  {
+    "concurrency": 8,
+    "requests": 12,
+    "successes": 12,
+    "failures": 0,
+    "elapsed_s": 2.238806,
+    "throughput_requests_per_s": 5.36,
+    "avg_latency_ms": 1268,
+    "p50_latency_ms": 1160,
+    "p95_latency_ms": 2920,
+    "avg_worker_elapsed_ms": 914,
+    "distributed_successes": 12,
+    "parallel_kernels": "openmp-cpp"
+  }
+]
