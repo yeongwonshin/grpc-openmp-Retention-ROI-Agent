@@ -1,42 +1,137 @@
+
 # Counterfactual Retention Lab
 
-## 목적
+## 1. Overview
 
-기존 리텐션 화면은 고객의 이탈 위험도, 추천 액션, 예산 타겟을 보여준다. `Counterfactual Retention Lab`은 여기서 한 단계 더 나아가 같은 고객에 대해 다음 시나리오의 기대 순이익을 비교한다.
+The existing retention dashboard provides information on customer churn risk, recommended retention actions, and budget-based customer targeting.
 
-- 아무것도 하지 않음
-- 5,000원 쿠폰 제공
-- 상담 전화
-- 푸시/이메일
-- 7일 대기
+The **Counterfactual Retention Lab** extends these capabilities by comparing the expected net profit of multiple intervention scenarios for the same customer.
 
-이 뷰의 목표는 “무엇을 추천할지”뿐 아니라 “왜 그 액션이 무개입이나 다른 액션보다 경제적으로 나은지”를 설명하는 것이다.
+### Intervention Scenarios
 
-## 계산 로직
+- No intervention
+- Offer a KRW 5,000 coupon
+- Customer support call
+- Push notification or email
+- Wait for 7 days
 
-핵심 계산은 `src/optimization/counterfactual.py`에 있다.
+The objective of this view is not only to determine **which action should be recommended**, but also to explain **why that action is expected to be more economically beneficial than taking no action or selecting an alternative intervention**.
 
-기본 아이디어는 다음과 같다.
+---
+
+## 2. Calculation Logic
+
+The core counterfactual estimation engine is implemented in:
+
+`src/optimization/counterfactual.py`
+
+### Core Formulas
+
+The expected financial outcomes are calculated using the following simplified formulas:
 
 ```text
-무개입 예상 순이익 = CLV × (1 - 현재 이탈 확률)
-액션 예상 순이익 = CLV × (1 - 액션 후 이탈 확률) - 액션 비용
-무개입 대비 개선액 = 액션 예상 순이익 - 무개입 예상 순이익
+Expected Net Profit (No Intervention)
+    = CLV × (1 - Current Churn Probability)
+
+Expected Net Profit (With Intervention)
+    = CLV × (1 - Post-Intervention Churn Probability)
+      - Intervention Cost
+
+Incremental Net Profit vs. No Intervention
+    = Expected Net Profit (With Intervention)
+      - Expected Net Profit (No Intervention)
 ```
 
-액션 후 이탈 확률은 기존 `churn_probability`, `uplift_score`, `CLV`, `survival/timing`, `coupon_affinity`, `price_sensitivity`, `discount_pressure_score` 등을 활용해 추정한다. Survival 산출물이 있으면 예상 이탈 시점과 긴급도 가중치가 반영된다. 없으면 안전한 기본값으로 계산한다.
+### Post-Intervention Churn Probability Estimation
 
-## 주의사항
+The post-intervention churn probability is estimated using existing customer features and model outputs, including:
 
-이 값은 실제 집행 결과가 아니라 예측 기반 반사실 추정치다. 따라서 운영 의사결정에서는 다음 절차가 필요하다.
+- `churn_probability`
+- `uplift_score`
+- `CLV`
+- `survival/timing`
+- `coupon_affinity`
+- `price_sensitivity`
+- `discount_pressure_score`
 
-1. 신뢰도 낮음/중간 고객은 A/B 테스트 또는 holdout에 포함한다.
-2. 실제 발송/상담/쿠폰 사용 로그를 남긴다.
-3. treatment와 control의 실제 매출·유지율 차이를 비교해 증분 ROI를 계산한다.
-4. 검증 결과를 uplift 및 action policy에 다시 반영한다.
+When survival analysis artifacts are available, the estimation incorporates:
 
-## 추가된 파일
+- Predicted time to churn
+- Timing urgency
+- Urgency-based weighting
 
-- `src/optimization/counterfactual.py`: 반사실 손익 계산 엔진
-- `dashboard/services/counterfactual_service.py`: 대시보드용 서비스 wrapper
-- `dashboard/app.py`: 신규 뷰 `고객별 대응 전략 비교` 추가
+If survival analysis artifacts are unavailable, the system uses conservative default values to maintain the calculation workflow.
+
+This allows the platform to compare intervention scenarios even when complete survival analysis outputs are not available.
+
+---
+
+## 3. Important Considerations
+
+The calculated values are **prediction-based counterfactual estimates**, not actual outcomes observed after executing retention interventions.
+
+Therefore, these estimates should be treated as decision-support indicators rather than experimentally verified causal effects.
+
+### Operational Validation Process
+
+1. **Conduct A/B Tests or Holdout Experiments**
+   - Include customers with low or medium prediction confidence in controlled experiments.
+
+2. **Record Actual Intervention Logs**
+   - Track message delivery, customer support calls, coupon redemptions, and other intervention activities.
+
+3. **Measure Incremental ROI**
+   - Compare actual revenue and retention rates between treatment and control groups to estimate incremental business impact.
+
+4. **Update Models and Action Policies**
+   - Incorporate experimentally validated results into uplift models and retention action selection policies.
+
+### Validation Objective
+
+The long-term goal is to establish a continuous feedback loop:
+
+```text
+Counterfactual Estimation
+    ↓
+Intervention Selection
+    ↓
+A/B Testing or Holdout Validation
+    ↓
+Observed Revenue and Retention Outcomes
+    ↓
+Incremental ROI Measurement
+    ↓
+Uplift Model and Action Policy Updates
+```
+
+This process helps improve the reliability of future intervention recommendations and aligns model-based predictions with observed business outcomes.
+
+---
+
+## 4. Added Files
+
+| File | Description |
+| --- | --- |
+| `src/optimization/counterfactual.py` | Core engine for counterfactual profit estimation |
+| `dashboard/services/counterfactual_service.py` | Service wrapper for integrating counterfactual calculations into the dashboard |
+| `dashboard/app.py` | Adds the new **Customer-Level Retention Strategy Comparison** view |
+
+---
+
+## 5. Summary
+
+The Counterfactual Retention Lab extends traditional churn prediction by evaluating the expected financial consequences of alternative retention actions.
+
+Rather than simply recommending an intervention, it provides an interpretable comparison of:
+
+- Expected net profit
+- Incremental profit relative to no intervention
+- Intervention costs
+- Estimated post-intervention churn probability
+- Customer-specific intervention suitability
+
+By combining churn predictions, uplift estimates, customer lifetime value, and intervention timing, the platform supports more economically informed retention decisions.
+
+However, the estimated outcomes remain model-based approximations and require validation through controlled experiments before their causal effects can be established.
+
+Ultimately, the Counterfactual Retention Lab aims to bridge the gap between **predictive analytics and economically justified retention intervention decisions**.
