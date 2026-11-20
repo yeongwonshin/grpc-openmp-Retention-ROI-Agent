@@ -1,121 +1,417 @@
-# 현재 분석 과정
 
-## 1. 시스템 아키텍처
+# Current Analysis Pipeline
 
-### 전체 구조
+## 1. System Architecture
 
+### Overall Architecture
+
+```text
+CSV Upload → Pipeline Training → Save Results → Dashboard
+                                   │
+                                   ▼ (Seed)
+                              PostgreSQL → Real-Time Operations Monitor
+                                   ▲
+                                   │ (Events)
+                              FastAPI Server ← External Systems
 ```
-CSV 업로드 → 파이프라인 학습 → 결과 저장 → 대시보드 표시
-                                    │
-                                    ▼ (seed)
-                              PostgreSQL → 실시간 운영 모니터
-                                    ▲
-                                    │ (이벤트)
-                              FastAPI 서버 ← 외부 시스템
+
+### System Components
+
+| Component | Role |
+| --- | --- |
+| **Streamlit** | Provides the user-facing analytical and operational dashboard |
+| **FastAPI** | Handles API communication and data exchange with external systems |
+| **PostgreSQL** | Provides persistent storage for customer data, prediction scores, and action queues |
+| **Redis** | Caches query results with a time-to-live (TTL) of 20 seconds |
+| **ML Models** | Perform churn prediction (LightGBM), survival analysis (Cox), Customer Lifetime Value (CLV) estimation, and uplift modeling |
+
+### PostgreSQL Integration
+
+- PostgreSQL containers are automatically provisioned through Docker Compose for local development and demonstration environments.
+- Files matching `src/api/services/user_live_*.py` contain the logic for reading from and writing to the PostgreSQL database named `retention_db`.
+- Database tables are automatically created through `CREATE TABLE IF NOT EXISTS` statements in the application code.
+- Database migration tools such as Alembic are not currently used.
+- In a production deployment, external business systems can send customer events to FastAPI endpoints, triggering the following workflow:
+
+```text
+External Customer Event
+    ↓
+FastAPI Endpoint
+    ↓
+PostgreSQL Persistence
+    ↓
+Customer Feature Update
+    ↓
+ML Model Rescoring
+    ↓
+Action Queue Update
 ```
 
-### 구성 요소
-
-| 구성 요소      | 역할                                             |
-| -------------- | ------------------------------------------------ |
-| **Streamlit**  | 사람이 보는 대시보드 화면                        |
-| **FastAPI**    | 외부 시스템과 데이터를 주고받는 API 서버         |
-| **PostgreSQL** | 고객 데이터, 점수, 액션 큐 영구 저장             |
-| **Redis**      | 쿼리 결과 캐시 (TTL 20초)                        |
-| **ML 모델**    | 이탈 예측(LightGBM), 생존 분석(Cox), CLV, Uplift |
-
-### PostgreSQL 연동 방식
-
-- Docker Compose로 PostgreSQL 컨테이너 자동 생성 (개발/데모용 로컬 환경)
-- `src/api/services/user_live_*.py` 파일들이 PostgreSQL의 `retention_db`를 읽고 쓰는 코드
-- 테이블은 코드에서 자동 생성 (`CREATE TABLE IF NOT EXISTS`), Alembic 등 마이그레이션 도구 미사용
-- 실제 배포 시에는 자사 시스템이 FastAPI 엔드포인트에 이벤트를 전송하면 자동으로 DB 저장 → ML 재채점 → 액션 큐 갱신이 이루어짐
+This architecture enables the platform to connect offline-trained models with event-driven retention operations.
 
 ---
 
-## 2. 이탈 확률 예측
+## 2. Churn Probability Prediction
 
-1. **이탈 라벨 정의**: 마지막 활동일로부터 30일 이상 비활동 시 이탈(churn=1)로 판정
-   - 사용자가 대시보드에서 이탈 기준 일수를 조절 가능
-   - 기업이 `churn_flag` 컬럼을 직접 제공하지 않아도 시스템이 자동으로 추론
+### 2.1. Churn Label Definition
 
-2. **모델 학습**: LightGBM 분류 모델, 88개 피처 사용
-   - 행동 카운터: `visit_7d`, `purchase_30d`, `sessions_30d` 등
-   - 시간 기반: `recency_days`, `days_since_last_event`, `inactivity_days`, `current_non_purchase_days`
-   - 구매 패턴: `avg_purchase_gap_days`, `cart_to_purchase_rate_30d` 등
-   - 세션/시간대: `evening_activity_ratio`, `weekend_purchase_ratio` 등
+A customer is classified as churned (`churn = 1`) when they remain inactive for at least 30 days following their most recent activity.
 
-3. **실시간 재채점**: 이벤트 수신 시 `score_changed_customers()` 함수가 모델로 재예측
+- The inactivity threshold can be adjusted by users through the dashboard.
+- The system can automatically infer churn labels even when the uploaded dataset does not contain an explicit `churn_flag` column.
+- The resulting labels are used as targets for supervised churn prediction.
+
+### 2.2. Model Training
+
+The platform trains a **LightGBM classification model** using 88 engineered features.
+
+These features capture different aspects of customer behavior and engagement.
+
+**Behavioral Activity Counts**
+
+Examples include:
+
+- `visit_7d`
+- `purchase_30d`
+- `sessions_30d`
+
+These features represent recent customer activity and transaction frequency.
+
+**Recency and Time-Based Features**
+
+Examples include:
+
+- `recency_days`
+- `days_since_last_event`
+- `inactivity_days`
+- `current_non_purchase_days`
+
+These features measure the time elapsed since specific customer activities and help identify behavioral inactivity.
+
+**Purchase Behavior Features**
+
+Examples include:
+
+- `avg_purchase_gap_days`
+- `cart_to_purchase_rate_30d`
+
+These features describe purchase frequency, conversion patterns, and deviations from typical purchasing behavior.
+
+**Session and Temporal Features**
+
+Examples include:
+
+- `evening_activity_ratio`
+- `weekend_purchase_ratio`
+
+These features capture customer activity patterns across different times of day and days of the week.
+
+### 2.3. Real-Time Rescoring
+
+When new customer events are received, the system invokes the `score_changed_customers()` function to update predictions for affected customers.
+
+The rescoring process uses the latest customer feature state to generate updated churn probability estimates.
+
+These updated scores can subsequently influence retention priorities and action queue decisions.
 
 ---
 
-## 3. 이탈 시점 예측 (Survival Analysis)
+## 3. Churn Timing Prediction (Survival Analysis)
 
-1. **데이터 준비**
-   - `landmark_date` = 데이터 마지막 활동일 - 90일 (horizon)
-   - landmark 이전 = 피처 (고객 행동 패턴)
-   - landmark 이후 = 정답 (실제로 며칠 뒤 이탈했는가)
+### 3.1. Data Preparation
 
-2. **Cox 비례위험 모델 학습** (lifelines 라이브러리)
-   - 입력: 고객별 피처 (방문빈도, 구매주기, 비활동일수 등)
-   - 학습: "이 피처 조합을 가진 고객은 며칠 뒤 이탈하는 경향이 있다"
-   - 출력: 각 피처의 위험 계수(hazard ratio)
+Survival analysis uses a landmark-based approach to separate historical customer behavior from future churn outcomes.
 
-3. **개인별 생존 곡선 → 중앙값 추출**
-   - 모델이 고객별로 1~90일 생존 곡선을 생성
-   - 생존확률이 50% 아래로 떨어지는 시점 = `predicted_median_time_to_churn_days`
-   - 예: 고객 1894의 생존곡선이 8일째에 50% 미만 → "8일 내 이탈 예상"
+The landmark date is defined as:
 
-4. **대시보드 표시**
-   - `예상 이탈 날짜 = landmark_date + predicted_days`
+```text
+landmark_date = last_activity_date_in_dataset - horizon_days
+```
 
-### horizon_days (90일 관찰 기간) 설정
+With the default observation horizon:
 
-- 기본값 90일, 파라미터로 변경 가능 (`run_survival_pipeline(..., horizon_days=60)`)
-- 이탈 기준(30일)과는 별개로, 모델이 정답을 확인할 수 있는 미래 관찰 기간
-- 90일 관찰에 필요한 데이터 기간:
+```text
+horizon_days = 90
+```
 
-| 업종                 | 방문 주기 | 권장 데이터 기간 |
-| -------------------- | --------- | ---------------- |
-| 이커머스 (패션/식품) | 주 1~2회  | 6개월 ~ 1년      |
-| 구독 서비스 (SaaS)   | 매일      | 3 ~ 6개월        |
-| 금융/보험            | 월 1~2회  | 1 ~ 2년          |
-| 자동차/가전          | 분기 1회  | 2 ~ 3년          |
+The dataset is divided into two periods:
 
-- 핵심 기준: 모델 피처 중 가장 긴 윈도우(90일 집계)를 계산할 수 있을 만큼의 사전 데이터 + 90일 관찰 기간 = **최소 6개월**
+- **Before the landmark date:** Historical customer behavior used for feature engineering.
+- **After the landmark date:** Future observation period used to determine when churn occurs.
 
-| 업로드 데이터 기간 | horizon 자동 조정           | 예측 범위                                 |
-| ------------------ | --------------------------- | ----------------------------------------- |
-| 1년 이상           | 90일 (기본값)               | 최대 90일 후까지 예측 가능                |
-| 6개월 ~ 1년        | 90일                        | 양호                                      |
-| 90일 ~ 6개월       | 데이터 기간의 절반으로 축소 | 단기~중기 예측                            |
-| 60일 ~ 90일        | 30일로 축소                 | 단기 예측만 가능                          |
-| 60일 미만          | **생존분석 불가**           | 이탈 확률만 제공, 이탈 시점 예측 비활성화 |
+This allows the model to learn the relationship between historical customer characteristics and subsequent churn timing.
+
+### 3.2. Cox Proportional Hazards Model
+
+The platform uses the **Cox Proportional Hazards model**, implemented through the `lifelines` Python library.
+
+**Model Inputs**
+
+Customer-level features, such as:
+
+- Visit frequency
+- Purchase intervals
+- Inactivity duration
+- Recent behavioral activity
+- Other engineered customer attributes
+
+**Training Objective**
+
+The model estimates how customer characteristics are associated with the relative hazard of churn over time.
+
+Conceptually, it learns patterns such as:
+
+> Customers exhibiting a particular combination of behavioral features tend to experience churn earlier or later than other customers.
+
+**Model Outputs**
+
+The model estimates regression coefficients that can be expressed as hazard ratios.
+
+These values describe how individual features are associated with increases or decreases in the relative churn hazard, under the proportional hazards assumption.
+
+### 3.3. Individual Survival Curves and Median Time to Churn
+
+After training, the model generates an individual survival probability curve for each customer over the prediction horizon.
+
+With the default configuration, the curve covers days 1 through 90.
+
+The predicted median time to churn is defined as the first time at which the estimated survival probability reaches or falls below 50%.
+
+```text
+predicted_median_time_to_churn_days
+    = First day when Survival Probability <= 0.50
+```
+
+**Example**
+
+Suppose customer `1894` has the following predicted survival probabilities:
+
+```text
+Day 1:  0.92
+Day 3:  0.81
+Day 5:  0.67
+Day 7:  0.54
+Day 8:  0.48
+```
+
+Because the survival probability falls below 50% on day 8:
+
+```text
+predicted_median_time_to_churn_days = 8
+```
+
+The dashboard can interpret this result as:
+
+```text
+Estimated median time to churn: 8 days
+```
+
+This is a probabilistic estimate rather than a guarantee that the customer will churn within eight days.
+
+If the survival probability does not fall to 50% within the prediction horizon, the median time to churn cannot be determined within that horizon.
+
+### 3.4. Dashboard Output
+
+The predicted churn date is calculated using:
+
+```text
+Estimated Churn Date
+    = Landmark Date + Predicted Days to Churn
+```
+
+The dashboard presents survival analysis results to help operators determine the appropriate timing of retention interventions.
 
 ---
 
-## 4. 실제 배포를 위한 데이터 흐름
+## 4. Configuring the Survival Analysis Horizon
 
-### 현재 (개발/데모)
+### 4.1. Observation Horizon
 
-```
-CSV 업로드 → 파이프라인 → 결과 파일 → seed → PostgreSQL → 대시보드
-(수동)       (1회성)                                      (파일 기반 + DB 일부)
-```
+The default survival analysis horizon is 90 days.
 
-### 배포 시 필요한 구조
+However, it can be modified through the pipeline parameters.
 
-```
-자사 시스템 → POST /api/v1/user-live/events → FastAPI
-             {"customer_id": 123,              → DB 저장
-              "event_type": "purchase",         → 피처 업데이트
-              "amount": 89000}                  → ML 재채점
-                                                → 액션 큐 갱신
-                                                → 대시보드 반영
+For example:
+
+```python
+run_survival_pipeline(..., horizon_days=60)
 ```
 
-| 방식               | 실시간성  | 적합한 경우        |
-| ------------------ | --------- | ------------------ |
-| CSV 업로드         | 수동      | PoC / 데모         |
-| 이벤트 API 연동    | 즉시 반영 | 운영 서비스 (권장) |
-| DB 직접 연결 (ETL) | 주기적    | 레거시 시스템      |
+The observation horizon is distinct from the churn inactivity threshold.
+
+- **Churn threshold (default: 30 days):** Defines when a customer is considered churned.
+- **Observation horizon (default: 90 days):** Defines the future period within which churn outcomes are observed during survival model training.
+
+The horizon determines how much future information is available for learning churn timing patterns.
+
+### 4.2. Historical Data Requirements
+
+For a 90-day observation horizon, the dataset should contain enough historical information to calculate behavioral features before the landmark date, followed by a sufficient future observation period.
+
+For example:
+
+```text
+Historical Feature Window (90 Days)
+                +
+Future Observation Window (90 Days)
+                =
+Minimum Data Coverage of Approximately 180 Days
+```
+
+Therefore, approximately six months of data is a practical minimum for the default configuration.
+
+The recommended data duration may vary depending on the industry and typical customer activity frequency.
+
+### Recommended Data Duration by Industry
+
+| Industry | Typical Activity Frequency | Recommended Historical Data Duration |
+| --- | --- | --- |
+| E-commerce (Fashion/Food) | 1–2 visits per week | 6 months to 1 year |
+| Subscription Services (SaaS) | Daily activity | 3–6 months |
+| Financial Services / Insurance | 1–2 interactions per month | 1–2 years |
+| Automotive / Home Appliances | Approximately once per quarter | 2–3 years |
+
+These recommendations are practical guidelines rather than strict statistical requirements.
+
+Industries with longer purchasing or interaction cycles generally require longer observation periods to capture meaningful customer behavior.
+
+### 4.3. Automatic Horizon Adjustment
+
+The platform adjusts the survival analysis horizon according to the available dataset duration.
+
+| Uploaded Data Duration | Horizon Adjustment | Prediction Coverage |
+| --- | --- | --- |
+| 1 year or longer | 90 days (default) | Predictions up to 90 days ahead |
+| 6 months to 1 year | 90 days | Suitable coverage for the default horizon |
+| 90 days to 6 months | Reduced to half of the available data duration | Short- to medium-term predictions |
+| 60 to 90 days | Reduced to 30 days | Short-term predictions only |
+| Less than 60 days | **Survival analysis unavailable** | Only churn probability prediction is provided; churn timing prediction is disabled |
+
+This adaptive strategy helps prevent the survival analysis pipeline from operating with insufficient historical or future observation data.
+
+It also enables the platform to provide partial analytical capabilities when users upload relatively short datasets.
+
+---
+
+## 5. Data Flow for Production Deployment
+
+### 5.1. Current Architecture (Development / Demo)
+
+The current implementation primarily follows a batch-oriented workflow.
+
+```text
+CSV Upload → ML Pipeline → Result Files → Seed → PostgreSQL → Dashboard
+(Manual)     (One-Time)                                   (File-Based + Partial DB)
+```
+
+**Workflow Description**
+
+1. Users manually upload business datasets.
+2. The ML pipeline processes the data and trains the required models.
+3. Generated results and model artifacts are saved to files.
+4. Selected artifacts are seeded into PostgreSQL.
+5. The dashboard loads analytical results from files and relevant operational data from the database.
+
+This architecture is suitable for:
+
+- Proof-of-concept development
+- Model validation
+- Product demonstrations
+- Competition submissions
+
+### 5.2. Target Architecture for Production
+
+For production environments, the platform is designed to receive events directly from external business systems.
+
+```text
+External Business System
+          │
+          ▼
+POST /api/v1/user-live/events
+          │
+          ▼
+      FastAPI
+          │
+          ├── Store Event in PostgreSQL
+          │
+          ├── Update Customer Features
+          │
+          ├── Recalculate ML Scores
+          │
+          ├── Update Retention Action Queue
+          │
+          └── Reflect Changes in Dashboard
+```
+
+### Example Event Payload
+
+```json
+{
+  "customer_id": 123,
+  "event_type": "purchase",
+  "amount": 89000
+}
+```
+
+In this configuration, external applications can continuously send customer interaction events to the platform.
+
+The system processes incoming events, updates the affected customer records, recalculates relevant prediction scores, and refreshes intervention recommendations.
+
+This enables retention decisions to adapt dynamically as customer behavior changes.
+
+### 5.3. Data Integration Methods
+
+| Integration Method | Update Frequency | Recommended Use Case |
+| --- | --- | --- |
+| CSV Upload | Manual | Proof of Concept (PoC) and demonstrations |
+| Event API Integration | Immediate event processing | Production services (recommended) |
+| Direct Database Integration (ETL) | Periodic updates | Legacy systems and scheduled data synchronization |
+
+### Integration Considerations
+
+**CSV Upload**
+
+Suitable for organizations that want to evaluate the platform using existing datasets without implementing direct system integration.
+
+**Event API Integration**
+
+Recommended for operational environments where customer activities should trigger timely feature updates, prediction recalculations, and action queue changes.
+
+**Direct Database Integration (ETL)**
+
+Suitable for organizations with legacy systems or scheduled data pipelines where event-driven API integration is not immediately feasible.
+
+---
+
+## 6. Summary
+
+Retention ROI Agent combines batch machine learning pipelines with a database-backed, event-driven operational architecture.
+
+Its analytical workflow consists of two major prediction components:
+
+1. **Churn Probability Prediction:** Estimates the likelihood that a customer will churn based on historical behavioral features.
+2. **Churn Timing Prediction:** Uses survival analysis to estimate when churn may occur.
+
+These predictions are subsequently integrated into retention decision-making and operational monitoring.
+
+The current development architecture supports CSV-based training, artifact generation, PostgreSQL seeding, and live event processing.
+
+For production use, the platform is designed to integrate with external business systems through FastAPI endpoints, enabling customer event ingestion, feature updates, model rescoring, and action queue management.
+
+The long-term architectural objective is to establish a continuous workflow:
+
+```text
+Customer Events
+    ↓
+Feature Engineering
+    ↓
+Churn Probability & Timing Prediction
+    ↓
+Retention Decision Optimization
+    ↓
+Action Queue Update
+    ↓
+Operational Dashboard
+```
+
+This architecture provides the foundation for transforming static churn analysis into an adaptive, data-driven customer retention decision system.
